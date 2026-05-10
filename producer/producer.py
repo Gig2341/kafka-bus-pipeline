@@ -63,19 +63,63 @@ def delivery_report(err, msg):
 
 print("🚍 Starting Real-Time Bus Producer...\n")
 
+def get_traffic_delay(hour):
+    """
+    Simulates realistic city traffic conditions
+    """
+
+    #  Late night / early morning
+    if 0 <= hour < 6:
+        return random.randint(0, 1)
+
+    #  Morning rush hour
+    elif 6 <= hour < 10:
+        return random.randint(2, 8)
+
+    #  Midday traffic
+    elif 10 <= hour < 16:
+        return random.randint(1, 4)
+
+    #  Evening rush hour
+    elif 16 <= hour < 20:
+        return random.randint(3, 10)
+
+    #  Night traffic
+    else:
+        return random.randint(0, 3)
+    
+
+
 for _, row in df.iterrows():
 
     trip_id = row["trip_id"]
 
-    # Initialize delay for new trip
+    # Initialize delay tracking
     if trip_id not in trip_delays:
         trip_delays[trip_id] = 0
 
-    # Increment delay (simulate traffic)
-    delay_increment = random.randint(0, 3)
+    # ✅ Get scheduled time FIRST
+    scheduled_time = row["scheduled_dt"]
+
+    # ✅ Extract hour
+    current_hour = scheduled_time.hour
+
+    # ✅ Traffic-aware delay
+    delay_increment = get_traffic_delay(current_hour)
+
+    # 🚨 Random accident simulation
+    if random.random() < 0.03:
+        delay_increment += random.randint(10, 20)
+        print("🚨 Accident causing heavy congestion!")
+
+    # Add cumulative delay
     trip_delays[trip_id] += delay_increment
 
-    scheduled_time = row["scheduled_dt"]
+    # Optional recovery
+    if random.random() < 0.15:
+        trip_delays[trip_id] = max(0, trip_delays[trip_id] - 2)
+
+    # Compute actual arrival
     actual_time = scheduled_time + timedelta(minutes=trip_delays[trip_id])
 
     event = {
@@ -99,10 +143,12 @@ for _, row in df.iterrows():
 
     producer.poll(0)
 
-    # ⏳ Realistic streaming delay
     sleep_time = random.uniform(1, 7)
-    print(f"⏳ Waiting {sleep_time:.2f}s...")
-    time.sleep(sleep_time)
+    print(
+        f"🚌 {trip_id} | "
+        f"{scheduled_time.strftime('%H:%M:%S')} | "
+        f"Delay: {trip_delays[trip_id]} mins | "
+        f"Sleeping {sleep_time:.2f}s"
+    )
 
-producer.flush()
-print("\n🎉 Finished streaming all events!")
+    time.sleep(sleep_time)
